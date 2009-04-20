@@ -49,7 +49,7 @@ def logMsg(m, v) :
     if v :
         print >> sys.stderr, m
 
-def getLastDayReport(username, password, verbose=False) :
+def getLastDayReport(username, password, reportDate, verbose=False) :
     logMsg('Initialising session with iTunes connect...', verbose)
     opener = urllib2.build_opener()
     s = opener.open(refererURL)
@@ -111,10 +111,8 @@ def getLastDayReport(username, password, verbose=False) :
     dateName = str(dict(b.findAll(attrs={'id' : 'dayorweekdropdown'})[0].attrs)['name'])
     logMsg('DONE', verbose)
 
-    logMsg('Fetching last day\'s report...', verbose)
-    reportDay = datetime.today() - timedelta(2)
-    reportDate = reportDay.strftime('%m/%d/%Y')
 
+    logMsg("Fetching report for %s..." % reportDate, verbose)
     '''
     Captured with Live HTTP Headers:
         9.7=Summary
@@ -145,22 +143,28 @@ def getLastDayReport(username, password, verbose=False) :
     return f.read()
 
 def usage(executableName) :
-    print >> sys.stderr, "Usage: %s -u <username> -p <password>" % executableName
+    print >> sys.stderr, "Usage: %s -u <username> -p <password> [-d mm/dd/year]" % executableName
 
 def main(args) :
     username, password, verbose = None, None, None
     try :
-        opts, args = getopt.getopt(sys.argv[1:], 'vu:p:')
+        opts, args = getopt.getopt(sys.argv[1:], 'vu:p:d:')
     except getopt.GetoptError, err :
         print >> sys.stderr, "Error: %s" % str(err)
         usage(os.path.basename(args[0]))
         sys.exit(2)
+
+    # Get today's date by default. Actually yesterday's date
+    reportDay = datetime.today() - timedelta(1)
+    reportDate = reportDay.strftime('%m/%d/%Y')
 
     for o, a in opts :
         if o == '-u' : 
             username = a
         if o == '-p' :
             password = a
+        if o == '-d' :
+            reportDate = a
         if o == '-v' :
             verbose = True
     
@@ -173,10 +177,10 @@ def main(args) :
     if verbose :
         # If the user has specified 'verbose', just let the exception propagate
         # so that we get a stacktrace from python.
-        result = getLastDayReport(username, password, True)
+        result = getLastDayReport(username, password, reportDate, True)
     else :
         try :
-            result = getLastDayReport(username, password)
+            result = getLastDayReport(username, password, reportDate)
         except Exception, e :
             print >> sys.stderr, "Error: problem processing output. Check your username and password."
             print >> sys.stderr, "Use -v for more detailed information."
