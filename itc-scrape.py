@@ -32,12 +32,42 @@ Bugfixes gratefully accepted. Send to jamcode <james@jam-code.com>.
 
 import urllib, urllib2, sys, os, os.path, re, pprint, gzip, StringIO, getopt
 import traceback
+import time
 from datetime import datetime, timedelta
 from BeautifulSoup import BeautifulSoup
+from pysqlite2 import dbapi2 as sqlite
 
 
 baseURL = 'https://itts.apple.com'
 refererURL = 'https://itts.apple.com/cgi-bin/WebObjects/Piano.woa'
+
+# column mappings
+id = 19
+country_code = 14
+r_date = 11
+product_type = 8
+units = 9
+roalty_price = 10
+roalty_currency = 15
+customer_price = 20
+customer_currency = 13
+title = 6
+vendor = 2
+service_provider = 0
+service_provider_country_code = 1
+upc = 3
+isrc = 4
+artist = 5
+label = 7
+preorder = 16
+season_pass = 17
+isan = 18
+cma = 21
+asset = 22
+vendor_offer_code = 23
+grid = 24
+promtion_code = 25
+parent_id = 26
 
 def updateReferer(opener, url) :
     refererURL = url
@@ -139,16 +169,38 @@ def getLastDayReport(username, password, reportDate, verbose=False) :
     s = StringIO.StringIO(h.read())
     f = gzip.GzipFile(fileobj=s)
     logMsg('DONE', verbose)
-
+    logMsg(h.read(), verbose)
     return f.read()
 
 def usage(executableName) :
-    print >> sys.stderr, "Usage: %s -u <username> -p <password> [-d mm/dd/year]" % executableName
+    print >> sys.stderr, "Usage: %s -u <username> -p <password> [-d mm/dd/year] [-o <database file>]" % executableName
+
+def checkDatabaseSetup(connection) :
+    cursor = connection.cursor()
+    cursor.execute('CREATE TABLE IF NOT EXISTS product_types (id VARCHAR(5) PRIMARY KEY, name VARCHAR(50))')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("1", "Application Purchase")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("7", "Application Update")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("IA1", "In-App Purchase")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("IAY", "In-App Subscription")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("1F", "Universal Apps, Free & Paid Apps")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("7F", "Universal Apps, Updates")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("1T", "iPad Only, Free & Paid Apps")')
+    cursor.execute('INSERT OR IGNORE INTO product_types VALUES ("7T", "iPad Only, Updates")')
+    cursor.execute('CREATE TABLE IF NOT EXISTS records (id INTEGER, country_code VARCHAR(3), r_date DATE, product_type VARCHAR(5), units INTEGER, roalty_price REAL, roalty_currency VARCHAR(3), customer_price REAL, customer_currency VARCHAR(3), title VARCHAR(255), vendor TEXT, service_provider VARCHAR(50), service_provider_country_code VARCHAR(3), upc TEXT, isrc TEXT, artist TEXT, label TEXT, preorder TEXT, season_pass TEXT, isan TEXT, cma TEXT, asset TEXT, vendor_offer_code TEXT, grid TEXT, promtion_code VARCHAR(10), parent_id INTEGER, PRIMARY KEY (id, country_code, r_date, product_type))')
+
+def storeRecordsToDatabase(connection, records) :
+    cursor = connection.cursor()
+    for line in records.splitlines()[1:]:
+    	values = line.split("\t")
+	date = time.strptime(values[r_date], '%m/%d/%Y')
+	date = time.strftime('%Y-%m-%d', date)
+	cursor.execute('INSERT INTO records VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (values[id], values[country_code], date, values[product_type], values[units], values[roalty_price], values[roalty_currency], values[customer_price], values[customer_currency], values[title], values[ vendor], values[service_provider], values[service_provider_country_code], values[upc], values[isrc], values[artist], values[label], values[preorder], values[season_pass], values[isan], values[cma], values[asset], values[vendor_offer_code], values[grid], values[promtion_code], values[parent_id] ))
+	
 
 def main(args) :
-    username, password, verbose = None, None, None
+    username, password, verbose, database = None, None, None, None
     try :
-        opts, args = getopt.getopt(sys.argv[1:], 'vu:p:d:')
+        opts, args = getopt.getopt(sys.argv[1:], 'vu:p:d:o:')
     except getopt.GetoptError, err :
         print >> sys.stderr, "Error: %s" % str(err)
         usage(os.path.basename(args[0]))
@@ -167,6 +219,8 @@ def main(args) :
             reportDate = a
         if o == '-v' :
             verbose = True
+	if o == '-o' :
+	    database = a
     
     if None in (username, password) :
         print >> sys.stderr, "Error: Must set -u and -p options."
@@ -186,7 +240,14 @@ def main(args) :
             print >> sys.stderr, "Use -v for more detailed information."
 
     print result
-
+    if database != None :
+        if verbose :
+     	    print "Saving Data to DB."
+	connection = sqlite.connect(database)
+	checkDatabaseSetup(connection)
+	storeRecordsToDatabase(connection, result)
+	connection.commit()
+	connection.close()
 if __name__ == '__main__' :
     main(sys.argv)
 
