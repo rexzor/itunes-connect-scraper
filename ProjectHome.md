@@ -1,0 +1,3 @@
+itunes-connect-scraper is a simple Python script that will login to iTunes Connect on your behalf and download your daily sales report. It was written from the ground up using BeautifulSoup, with special care taken to extract form details from the returned HTML, rather than assuming that they will remain constant for all of time.
+
+This is a script we made internally so that we can track our own sales. We're releasing here in the hope that others can get some benefit from it. It now more or less meets our needs, but we'll gladly accept patches to enhance it, fix bugs etc.
